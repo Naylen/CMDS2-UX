@@ -1,7 +1,6 @@
 """SQLAlchemy models for persistent storage."""
 
 from datetime import datetime, timezone
-from typing import Optional
 
 from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -22,12 +21,12 @@ class JobRecord(Base):
     mode: Mapped[str] = mapped_column(String(16))
     category: Mapped[str] = mapped_column(String(32), index=True)
     status: Mapped[str] = mapped_column(String(16))
-    exit_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    exit_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
     started_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
-    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    run_dir: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    run_dir: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
 
 class AuditLog(Base):
@@ -41,8 +40,8 @@ class AuditLog(Base):
     )
     user: Mapped[str] = mapped_column(String(64))
     action: Mapped[str] = mapped_column(String(128))
-    detail: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
 
 
 class UserRecord(Base):

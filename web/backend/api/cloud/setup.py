@@ -80,30 +80,39 @@ async def test_ssh(config: SetupConfig, _user: str = Depends(get_current_user)):
 
 @router.post("/test-api", response_model=TestResult)
 async def test_api(config: SetupConfig, _user: str = Depends(get_current_user)):
-    """Validate Meraki API key by fetching organizations."""
+    """Validate Meraki API key by fetching organizations via the meraki SDK."""
     api_key = config.MERAKI_API_KEY
     if not api_key or api_key.endswith("****"):
         return TestResult(success=False, message="API key not provided")
 
+    import asyncio as _aio
+    import meraki.aio
+
     try:
-        # Pass API key via environment variable, not command line (avoids /proc exposure)
-        proc = await asyncio.create_subprocess_exec(
-            "python3", "-c",
-            "import os, meraki; d=meraki.DashboardAPI(os.environ['MERAKI_KEY'],suppress_logging=True); "
-            "orgs=d.organizations.getOrganizations(); "
-            "print(f'OK: {len(orgs)} organization(s) accessible')",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, "MERAKI_KEY": api_key},
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
-        if proc.returncode == 0:
-            return TestResult(success=True, message=stdout.decode().strip())
-        return TestResult(
-            success=False,
-            message=f"API validation failed: {stderr.decode().strip()[:300]}"
-        )
-    except asyncio.TimeoutError:
-        return TestResult(success=False, message="API call timed out (30s)")
+        async with meraki.aio.AsyncDashboardAPI(
+            api_key,
+            suppress_logging=True,
+            maximum_retries=1,
+            wait_on_rate_limit=False,
+        ) as dashboard:
+            orgs = await _aio.wait_for(
+                dashboard.organizations.getOrganizations(), timeout=20
+            )
+            count = len(orgs) if isinstance(orgs, list) else 0
+            return TestResult(
+                success=True,
+                message=f"OK: {count} organization(s) accessible",
+            )
+    except _aio.TimeoutError:
+        return TestResult(success=False, message="API call timed out (20s)")
+    except meraki.exceptions.APIError as e:
+        status = getattr(e, "status", "")
+        if str(status) == "401":
+            return TestResult(success=False, message="Invalid API key (HTTP 401 Unauthorized)")
+        if str(status) == "403":
+            return TestResult(success=False, message="API key lacks organization access (HTTP 403)")
+        if str(status) == "429":
+            return TestResult(success=False, message="Rate limited — try again shortly (HTTP 429)")
+        return TestResult(success=False, message=f"API error: {e}")
     except Exception as e:
         return TestResult(success=False, message=str(e))

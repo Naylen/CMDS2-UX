@@ -21,7 +21,7 @@ RUN npm run build
 
 # ── Stage 2: Production image ─────────────────────────────────────────────
 
-FROM rockylinux:9.3
+FROM rockylinux/rockylinux:10.1
 
 ARG S6_OVERLAY_VERSION=3.2.2.0
 ARG TARGETARCH
@@ -36,9 +36,8 @@ ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLA
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-x86_64.tar.xz /tmp/s6-overlay-x86_64.tar.xz
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-aarch64.tar.xz /tmp/s6-overlay-aarch64.tar.xz
 
-RUN dnf -y install xz tar && \
+RUN dnf -y install xz tar && dnf clean all && \
     set -eux; \
-    # Determine architecture
     case "${TARGETARCH:-$(uname -m)}" in \
       amd64|x86_64)  ARCH=x86_64 ;; \
       arm64|aarch64) ARCH=aarch64 ;; \
@@ -54,7 +53,7 @@ RUN dnf -y install xz tar && \
 RUN dnf -y install epel-release && \
     dnf config-manager --set-enabled crb && \
     dnf -y makecache --refresh && \
-    dnf -y --allowerasing install \
+    dnf -y install \
       dialog \
       expect \
       tar \
@@ -93,9 +92,11 @@ RUN dnf -y install epel-release && \
 # Layer 3: Python packages
 # ---------------------------------------------------------------------------
 COPY web/backend/requirements.txt /tmp/requirements-web.txt
-RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    python3 -m pip install --no-cache-dir meraki && \
-    python3 -m pip install --no-cache-dir -r /tmp/requirements-web.txt && \
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
+      --upgrade pip setuptools wheel && \
+    python3 -m pip install --no-cache-dir --break-system-packages meraki && \
+    python3 -m pip install --no-cache-dir --break-system-packages \
+      -r /tmp/requirements-web.txt && \
     rm -f /tmp/requirements-web.txt
 
 # ---------------------------------------------------------------------------

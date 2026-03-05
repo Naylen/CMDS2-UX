@@ -10,4 +10,3 @@ aiosqlite==0.20.0
 sqlalchemy[asyncio]==2.0.36
 pydantic==2.10.3
 pydantic-settings==2.7.0
-eval_type_backport>=0.2.0
