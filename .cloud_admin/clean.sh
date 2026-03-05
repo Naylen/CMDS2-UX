@@ -4,6 +4,9 @@
 
 set -euo pipefail
 
+# Web API progress support (Phase 2)
+[[ "${CMDS_WEB_MODE:-0}" == "1" ]] && . /usr/local/lib/cmds2/docker-helpers.sh 2>/dev/null || true
+
 TARGET_DIR="${1:-.}"
 
 # Require dialog

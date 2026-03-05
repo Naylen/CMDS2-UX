@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+.github
+
+# Documentation (not needed in image)
+README.md
+EASY_INSTALL
+
+# Installer scripts (not needed — Dockerfile replaces the installer)
+CMDS2-Installer.sh
+CMDS2Install.sh
+
+# Development files
+*.md
+!.cloud_admin/read.me
+!.hybrid_admin/read.me
+docker-compose.override.yml
+docker-compose.dev.yml
+
+# Phase 2 build artifacts (frontend built in Docker multi-stage)
+web/frontend/node_modules
+web/frontend/.vite
+web/frontend/dist
+web/backend/__pycache__
+web/backend/**/__pycache__
+*.pyc
+
+# IDE and OS files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+Thumbs.db
+.DS_Store
+
+# Plans and memory (Claude Code workspace files)
+.claude

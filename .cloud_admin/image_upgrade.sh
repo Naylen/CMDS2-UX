@@ -47,6 +47,9 @@ source "$BASE_ENV"
 # shellcheck disable=SC1090
 source "$SEL_ENV"
 
+# Web API progress support (Phase 2)
+[[ "${CMDS_WEB_MODE:-0}" == "1" ]] && . /usr/local/lib/cmds2/docker-helpers.sh 2>/dev/null || true
+
 __deq(){ local s="$1"; s="${s//\\!/!}"; s="${s//\\;/;}"; s="${s//\\ / }"; s="${s//\\\\/\\}"; printf '%s' "$s"; }
 
 SSH_USERNAME="$(__deq "${SSH_USERNAME:-}")"
@@ -970,6 +973,7 @@ log "Firmware local dir (percent fallback): ${FIRMWARE_LOCAL_DIR}"
 log "Targets: ${TARGETS[*]}"
 assess_latency_and_set_concurrency
 gauge 1 "Starting… (up to ${MAX_CONCURRENCY} in parallel)"
+web_progress 5 "Starting IOS-XE upgrade for ${TOTAL} devices…"
 
 ACTIVE=0
 DONE=0
@@ -984,6 +988,7 @@ for ip in "${TARGETS[@]}"; do
     ((DONE++))
     pct=$(( 100 * DONE / TOTAL ))
     gauge "$pct" "Completed $DONE / $TOTAL"
+    web_progress $(( 10 + 80 * DONE / TOTAL )) "Completed ${DONE}/${TOTAL} devices"
     ((ACTIVE--))
   fi
 done
@@ -993,7 +998,9 @@ while (( DONE < TOTAL )); do
   ((DONE++))
   pct=$(( 100 * DONE / TOTAL ))
   gauge "$pct" "Completed $DONE / $TOTAL"
+  web_progress $(( 10 + 80 * DONE / TOTAL )) "Completed ${DONE}/${TOTAL} devices"
 done
+web_progress 100 "Firmware upgrade complete"
 
 log "Summary: $SUMMARY_CSV"
 if (( DIALOG )) && [[ "${SHOW_RUN_SUMMARY:-0}" == "1" ]]; then

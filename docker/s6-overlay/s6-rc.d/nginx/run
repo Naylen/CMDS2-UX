@@ -1,0 +1,7 @@
+#!/command/execlineb -P
+
+# nginx — reverse proxy for CMDS2 web UI
+# Serves static frontend on port 8443 (TLS)
+# Proxies /api/* to uvicorn on 127.0.0.1:8000
+
+exec nginx -g "daemon off;"

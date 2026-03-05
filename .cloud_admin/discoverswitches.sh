@@ -30,6 +30,9 @@ set +H
 # shellcheck disable=SC1090
 source "$ENV_FILE"
 
+# Web API progress support (Phase 2)
+[[ "${CMDS_WEB_MODE:-0}" == "1" ]] && . /usr/local/lib/cmds2/docker-helpers.sh 2>/dev/null || true
+
 __deq() {
   local s="${1//$'\r'/}"
   s="${s//\\!/!}"
@@ -1148,6 +1151,7 @@ run_probe_pool() {
         pids=("${pids[@]:1}")
       fi
       ((done++)); ui_gauge $(( 25 + 60 * done / total )) "Probing devices… ($done / $total)"
+      web_progress $(( 25 + 60 * done / total )) "Probing switches… ($done / $total)"
       ((running--))
     fi
   done
@@ -1160,6 +1164,7 @@ run_probe_pool() {
       pids=("${pids[@]:1}")
     fi
     ((done++)); ui_gauge $(( 25 + 60 * done / total )) "Probing devices… ($done / $total)"
+    web_progress $(( 25 + 60 * done / total )) "Finalizing probe ($done / $total)"
     ((running--))
   done
 }

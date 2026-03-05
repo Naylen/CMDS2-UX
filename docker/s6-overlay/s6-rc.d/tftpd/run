@@ -1,0 +1,3 @@
+#!/command/execlineb -P
+# TFTP server — serves firmware images and receives config backups
+/usr/sbin/in.tftpd -L -c -p -s /var/lib/tftpboot --foreground

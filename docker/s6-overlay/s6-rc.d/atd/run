@@ -1,0 +1,3 @@
+#!/command/execlineb -P
+# at daemon — runs scheduled firmware upgrades
+/usr/sbin/atd -f

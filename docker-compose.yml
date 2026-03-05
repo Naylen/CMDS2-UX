@@ -1,0 +1,98 @@
+###############################################################################
+# CMDS2 — Catalyst-to-Meraki Deployment Server
+#
+# Production docker-compose configuration.
+#
+# Quick start:
+#   docker compose up -d
+#   docker exec -it cmds2 bash -c 'cd /root && bash meraki_migration.sh'
+#
+# Web UI:
+#   https://<host>:8443  (default credentials: admin / changeme)
+#
+# Upload firmware images:
+#   docker cp ./cat9k_iosxe.17.15.01.SPA.bin cmds2:/var/lib/tftpboot/images/
+#
+# View logs:
+#   docker compose logs -f cmds2
+###############################################################################
+
+services:
+  cmds2:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: cmds2
+    hostname: cmds2-server
+    restart: unless-stopped
+
+    # Production (Linux): uncomment network_mode and remove ports section
+    #   network_mode: host is required for TFTP (UDP 69 + dynamic data ports),
+    #   direct SSH to switches, and optional DHCP broadcast.
+    # network_mode: host
+
+    # Development / Docker Desktop (Windows/Mac): use port mappings
+    ports:
+      - "8443:8443"   # Web UI (HTTPS)
+      - "80:80"       # httpd firmware serving
+      - "69:69/udp"   # TFTP
+
+    volumes:
+      # Firmware images and TFTP data (potentially many GB)
+      - cmds2-tftpboot:/var/lib/tftpboot
+
+      # Operation logs and run history
+      - cmds2-cloud-runs:/root/.cloud_admin/runs
+      - cmds2-hybrid-runs:/root/.hybrid_admin/runs
+
+      # Persistent state (env files, ok markers, meraki_memory, schedules)
+      - cmds2-cloud-state:/root/.cloud_admin/state
+
+      # Server admin state (backup configs, version info, update history)
+      - cmds2-server-admin:/root/.server_admin
+
+      # Scheduled job persistence (at daemon spool)
+      - cmds2-at-spool:/var/spool/at
+
+      # SQLite database for Phase 2 web UI
+      - cmds2-db:/var/lib/cmds2
+
+    environment:
+      # Signals scripts they are running inside Docker
+      - CMDS_DOCKER=1
+      # Timezone for scheduling and log timestamps
+      - TZ=${TZ:-America/New_York}
+      # Set to 0 to allow offline operation (no GitHub update check)
+      - ONLINE_REQUIRED=${ONLINE_REQUIRED:-1}
+      - ONLINE_BYPASS_ALLOWED=${ONLINE_BYPASS_ALLOWED:-0}
+      # Phase 2: Web UI authentication
+      - CMDS_ADMIN_USER=${CMDS_ADMIN_USER:-admin}
+      - CMDS_ADMIN_PASSWORD=${CMDS_ADMIN_PASSWORD:-changeme}
+      - CMDS_JWT_SECRET=${CMDS_JWT_SECRET:-}
+
+    healthcheck:
+      test: ["CMD", "bash", "/docker-healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+    # Required for interactive TUI access via docker exec
+    stdin_open: true
+    tty: true
+
+volumes:
+  cmds2-tftpboot:
+    name: cmds2-tftpboot
+  cmds2-cloud-runs:
+    name: cmds2-cloud-runs
+  cmds2-hybrid-runs:
+    name: cmds2-hybrid-runs
+  cmds2-cloud-state:
+    name: cmds2-cloud-state
+  cmds2-server-admin:
+    name: cmds2-server-admin
+  cmds2-at-spool:
+    name: cmds2-at-spool
+  cmds2-db:
+    name: cmds2-db

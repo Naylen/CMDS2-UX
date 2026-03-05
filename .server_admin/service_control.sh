@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ServiceMan – systemd service manager (dialog UI) — dynamic unit detection
+# Docker-aware: when CMDS_DOCKER=1, uses s6-svc instead of systemctl.
 set -euo pipefail
 
 # ─── Stable environment for systemctl ─────────────────────────────────────────
@@ -8,6 +9,16 @@ export LANG=C
 export SYSTEMD_PAGER=
 export SYSTEMD_LESS=
 export SYSTEMD_COLORS=0
+
+# ─── Docker detection ───────────────────────────────────────────────────────
+in_docker() { [[ "${CMDS_DOCKER:-0}" == "1" ]]; }
+
+# s6-rc service names (systemd unit -> s6 longrun name)
+declare -A S6_MAP=(
+  [httpd.service]="httpd"
+  [tftp-server.socket]="tftpd"
+  [atd.service]="atd"
+)
 
 # ─── Requirements ─────────────────────────────────────────────────────────────
 if ! command -v dialog >/dev/null 2>&1; then
@@ -32,6 +43,16 @@ declare -A SERVICE_ADMIN_TOOLS=(
 CANDIDATE_UNITS=()
 
 build_candidate_units() {
+  if in_docker; then
+    # In Docker, only s6-managed services are available
+    CANDIDATE_UNITS=(
+      httpd.service
+      tftp-server.socket
+      atd.service
+    )
+    return
+  fi
+
   # Base services we always care about
   CANDIDATE_UNITS=(
     chronyd.service
@@ -58,9 +79,20 @@ build_candidate_units() {
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 service_state() {
   # Return exactly one token: active|inactive|failed|activating|deactivating|reloading|dead|unknown
-  local s
-  s=$(systemctl is-active "$1" 2>/dev/null) || true
-  echo "${s:-unknown}"
+  local unit="$1"
+  if in_docker; then
+    local s6name="${S6_MAP[$unit]:-}"
+    if [[ -z "$s6name" ]]; then echo "unknown"; return; fi
+    if s6-svstat "/run/service/${s6name}" 2>/dev/null | grep -q 'true'; then
+      echo "active"
+    else
+      echo "inactive"
+    fi
+  else
+    local s
+    s=$(systemctl is-active "$unit" 2>/dev/null) || true
+    echo "${s:-unknown}"
+  fi
 }
 
 pretty_state() {
@@ -83,6 +115,11 @@ style_state() {
 
 # A unit is "installed/present" if systemd knows about it (rc 0 or 3)
 _present_unit() {
+  if in_docker; then
+    local s6name="${S6_MAP[$1]:-}"
+    [[ -n "$s6name" ]] && [[ -d "/run/service/${s6name}" ]] && return 0
+    return 1
+  fi
   if systemctl status "$1" >/dev/null 2>&1; then
     return 0
   else
@@ -124,8 +161,13 @@ control_unit_menu() {
 
   while true; do
     local a f label styled header choice rc
-    a=$(systemctl is-active "$unit" 2>/dev/null) || a=""
-    f=$(systemctl is-failed "$unit" 2>/dev/null) || f=""
+    if in_docker; then
+      a=$(service_state "$unit")
+      f=""
+    else
+      a=$(systemctl is-active "$unit" 2>/dev/null) || a=""
+      f=$(systemctl is-failed "$unit" 2>/dev/null) || f=""
+    fi
 
     if [[ "$f" == "failed" ]]; then
       label="failed/stopped";         styled=$'\Z1failed/stopped\Zn'
@@ -162,11 +204,42 @@ control_unit_menu() {
     [[ $rc -ne 0 ]] && break
 
     case "$choice" in
-      1) systemctl start   "$unit" && dialog --msgbox "$unit started."   6 50 ;;
-      2) systemctl stop    "$unit" && dialog --msgbox "$unit stopped."   6 50 ;;
-      3) systemctl restart "$unit" && dialog --msgbox "$unit restarted." 6 50 ;;
+      1)
+         if in_docker; then
+           local s6name="${S6_MAP[$unit]:-}"
+           [[ -n "$s6name" ]] && s6-svc -u "/run/service/${s6name}" 2>/dev/null
+         else
+           systemctl start "$unit"
+         fi
+         dialog --msgbox "$unit started." 6 50 ;;
+      2)
+         if in_docker; then
+           local s6name="${S6_MAP[$unit]:-}"
+           [[ -n "$s6name" ]] && s6-svc -d "/run/service/${s6name}" 2>/dev/null
+         else
+           systemctl stop "$unit"
+         fi
+         dialog --msgbox "$unit stopped." 6 50 ;;
+      3)
+         if in_docker; then
+           local s6name="${S6_MAP[$unit]:-}"
+           [[ -n "$s6name" ]] && s6-svc -r "/run/service/${s6name}" 2>/dev/null
+         else
+           systemctl restart "$unit"
+         fi
+         dialog --msgbox "$unit restarted." 6 50 ;;
       4)
-         journalctl -u "$unit" -n 200 --no-pager > "/tmp/${unit//\//_}_logs.txt"
+         if in_docker; then
+           local s6name="${S6_MAP[$unit]:-}"
+           if [[ -n "$s6name" ]]; then
+             echo "s6-managed service: ${s6name}" > "/tmp/${unit//\//_}_logs.txt"
+             s6-svstat "/run/service/${s6name}" >> "/tmp/${unit//\//_}_logs.txt" 2>&1
+           else
+             echo "No logs available in Docker mode." > "/tmp/${unit//\//_}_logs.txt"
+           fi
+         else
+           journalctl -u "$unit" -n 200 --no-pager > "/tmp/${unit//\//_}_logs.txt"
+         fi
          dialog --title "$unit Logs (arrows/PageUp/PageDown)" \
                 --tailbox "/tmp/${unit//\//_}_logs.txt" 30 160
          ;;
@@ -222,6 +295,11 @@ manage_units_menu() {
 
 # ─── Enable/Disable Services Submenu ──────────────────────────────────────────
 enable_disable_menu() {
+  if in_docker; then
+    dialog --clear --title "Not Available" \
+           --msgbox "Service enable/disable is managed by s6-overlay in Docker mode.\n\nUse View/Manage Services to start/stop individual services." 9 70
+    return
+  fi
   set +e
   dialog --clear \
          --title "Enable/Disable Services" \

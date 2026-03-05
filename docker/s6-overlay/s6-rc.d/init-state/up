@@ -1,0 +1,33 @@
+#!/command/execlineb -P
+
+# Configure state file redirection.
+#
+# When scripts write .env/.ok/.json files to /root/.cloud_admin/,
+# we want them to also land in state/ so they survive container rebuilds.
+# This script sets up a background inotifywait if available, or the scripts
+# themselves can check CMDS_DOCKER and write to state/ directly.
+#
+# For now, we create a wrapper that clean.sh and setupwizard.sh can use
+# to persist critical files into the state volume.
+
+foreground {
+  /bin/bash -c "
+    STATE=/root/.cloud_admin/state
+
+    # Create a persist helper script that other scripts can call
+    cat > /usr/local/bin/cmds2-persist <<'PERSIST'
+#!/bin/bash
+# cmds2-persist <filepath> — Copy a file to the state volume for persistence
+# Usage: cmds2-persist /root/.cloud_admin/meraki_discovery.env
+[[ \"\${CMDS_DOCKER:-0}\" == \"1\" ]] || exit 0
+src=\"\$1\"
+[ -f \"\$src\" ] || exit 0
+STATE=/root/.cloud_admin/state
+base=\$(basename \"\$src\")
+cp -f \"\$src\" \"\${STATE}/\${base}\"
+PERSIST
+    chmod +x /usr/local/bin/cmds2-persist
+
+    echo '[init-state] Persistence helper installed.'
+  "
+}

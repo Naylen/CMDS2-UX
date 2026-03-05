@@ -1,0 +1,34 @@
+#!/command/execlineb -P
+
+# Create TFTP directory structure and set permissions
+foreground { mkdir -p /var/lib/tftpboot/images }
+foreground { mkdir -p /var/lib/tftpboot/hybrid }
+foreground { mkdir -p /var/lib/tftpboot/wlc }
+foreground { mkdir -p /var/lib/tftpboot/mig }
+foreground { mkdir -p /var/lib/tftpboot/cat }
+foreground { chmod -R 777 /var/lib/tftpboot }
+
+# Create run directories for each admin module
+foreground { mkdir -p /root/.cloud_admin/runs/discoveryscans }
+foreground { mkdir -p /root/.cloud_admin/runs/firmware_reports }
+foreground { mkdir -p /root/.cloud_admin/runs/preflight }
+foreground { mkdir -p /root/.cloud_admin/runs/migration }
+foreground { mkdir -p /root/.cloud_admin/runs/port_migration }
+foreground { mkdir -p /root/.cloud_admin/runs/mgmt_ip }
+foreground { mkdir -p /root/.cloud_admin/runs/cli_runs }
+foreground { mkdir -p /root/.cloud_admin/runs/createnetworks }
+foreground { mkdir -p /root/.hybrid_admin/runs }
+
+# Create state directories
+foreground { mkdir -p /root/.cloud_admin/state/meraki_memory }
+foreground { mkdir -p /root/.cloud_admin/state/schedules }
+foreground { mkdir -p /root/.cloud_admin/state/uplink_types }
+
+# Ensure at spool directory exists
+foreground { mkdir -p /var/spool/at }
+
+# Create Apache document root
+foreground { mkdir -p /var/www/html }
+
+# Database directory for Phase 2
+foreground { mkdir -p /var/lib/cmds2 }

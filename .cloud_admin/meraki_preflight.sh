@@ -62,6 +62,9 @@ SEL_JSON="$SCRIPT_DIR/selected_upgrade.json"
 CLOUD_MODELS_JSON_DEFAULT="$SCRIPT_DIR/cloud_models.json"
 CLOUD_MODELS_JSON="${CLOUD_MODELS_JSON:-$CLOUD_MODELS_JSON_DEFAULT}"
 
+# Web API progress support (Phase 2)
+[[ "${CMDS_WEB_MODE:-0}" == "1" ]] && . /usr/local/lib/cmds2/docker-helpers.sh 2>/dev/null || true
+
 # Flag file used by subsequent scripts to know if preflight is clean
 PREFLIGHT_OK_FLAG="$SCRIPT_DIR/preflight.ok"
 
@@ -781,6 +784,7 @@ meraki_preflight(){
   local MAX_CONCURRENCY="${MAX_CONCURRENCY:-5}"
   local ACTIVE=0 DONE=0 TOTAL=${#TARGETS[@]}
   rand_ms(){ awk -v m="${SPLAY_MS:-150}" 'BEGIN{srand(); printf "%.3f", (rand()*m)/1000.0}'; }
+  web_progress 5 "Starting preflight on ${TOTAL} switches"
 
   for ip in "${TARGETS[@]}"; do
     ( probe_one "$ip" ) &
@@ -789,13 +793,16 @@ meraki_preflight(){
     if (( ACTIVE >= MAX_CONCURRENCY )); then
       wait -n || true
       ((DONE++)); local pct=$(( 100 * DONE / TOTAL )); gauge "$pct" "Processed $DONE / $TOTAL"
+      web_progress $(( 10 + 80 * DONE / TOTAL )) "Preflight: ${DONE}/${TOTAL} complete"
       ((ACTIVE--))
     fi
   done
   while (( DONE < TOTAL )); do
     wait -n || true
     ((DONE++)); local pct=$(( 100 * DONE / TOTAL )); gauge "$pct" "Processed $DONE / $TOTAL"
+    web_progress $(( 10 + 80 * DONE / TOTAL )) "Preflight: ${DONE}/${TOTAL} complete"
   done
+  web_progress 100 "Preflight complete"
 
     gauge 100 "Done"
   log "Summary: $SUMMARY_CSV"

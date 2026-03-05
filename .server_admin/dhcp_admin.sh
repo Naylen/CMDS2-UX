@@ -15,6 +15,9 @@
 
 set -euo pipefail
 
+# Docker detection
+in_docker() { [[ "${CMDS_DOCKER:-0}" == "1" ]]; }
+
 # --- Global UI/paths ---
 BACKTITLE=${BACKTITLE:-"KEA DHCP Manager (kea-dhcp4)"}
 export DIALOGOPTS="--backtitle $BACKTITLE"
@@ -73,13 +76,29 @@ valid_domain(){
 
 # ---------- KEA helpers ----------
 kea_validate(){ local f="$1"; kea-dhcp4 -t "$f" >/dev/null 2>&1; }
+kea_restart_inline(){
+  if in_docker; then
+    s6-svc -r "/run/service/kea-dhcp4" 2>/dev/null || true
+  else
+    systemctl restart "$SERVICE" >/dev/null 2>&1 || true
+  fi
+}
 restart_service(){
-  {
-    echo 20; systemctl daemon-reload >/dev/null 2>&1
-    echo 60; systemctl restart "$SERVICE" >/dev/null 2>&1
-    echo 90; sleep 0.25
-    systemctl is-active "$SERVICE" >/dev/null 2>&1 && echo 100 || echo 0
-  } | "$DIALOG" --gauge "Restarting $SERVICE..." 8 50 0
+  if in_docker; then
+    {
+      echo 20; sleep 0.2
+      echo 60; s6-svc -r "/run/service/kea-dhcp4" 2>/dev/null || true
+      echo 90; sleep 0.25
+      echo 100
+    } | "$DIALOG" --gauge "Restarting $SERVICE (Docker/s6)..." 8 50 0
+  else
+    {
+      echo 20; systemctl daemon-reload >/dev/null 2>&1
+      echo 60; systemctl restart "$SERVICE" >/dev/null 2>&1
+      echo 90; sleep 0.25
+      systemctl is-active "$SERVICE" >/dev/null 2>&1 && echo 100 || echo 0
+    } | "$DIALOG" --gauge "Restarting $SERVICE..." 8 50 0
+  fi
 }
 
 # ==========================================================
@@ -687,7 +706,7 @@ add_mac_reservation(){
 
   if kea_validate "$tmp"; then
     mv "$tmp" "$CONF"; chown kea:kea "$CONF"; chmod 640 "$CONF"; restorecon "$CONF" 2>/dev/null || true
-    systemctl restart "$SERVICE"
+    kea_restart_inline
     "$DIALOG" --msgbox "Reservation added and $SERVICE restarted." 6 60
   else
     rm -f "$tmp"; "$DIALOG" --msgbox "Validation failed; no change written." 6 60
@@ -789,7 +808,7 @@ PY
     cp -a "$CONF" "${CONF}.bak.$(date +%Y%m%d%H%M%S)" || true
     mv -f "$tmp_json" "$CONF"
     chown kea:kea "$CONF"; chmod 640 "$CONF"; restorecon "$CONF" 2>/dev/null || true
-    systemctl restart "$SERVICE" >/dev/null 2>&1 || true
+    kea_restart_inline
     "$DIALOG" --msgbox "Deleted $removed reservation(s) and restarted $SERVICE." 6 64
   else
     rm -f "$tmp_json"
@@ -960,7 +979,7 @@ PY
     cp -a "$CONF" "${CONF}.bak.$(date +%Y%m%d%H%M%S)" || true
     mv -f "$tmp_json" "$CONF"
     chown kea:kea "$CONF"; chmod 640 "$CONF"; restorecon "$CONF" 2>/dev/null || true
-    systemctl restart "$SERVICE" >/dev/null 2>&1 || true
+    kea_restart_inline
     "$DIALOG" --msgbox "Deleted $removed reservation(s) and restarted $SERVICE." 6 64
   else
     rm -f "$tmp_json"

@@ -1,0 +1,49 @@
+#!/command/execlineb -P
+
+# Restore persisted state files via symlinks.
+#
+# The state/ volume persists .env, .ok, .json, and meraki_memory/ files
+# between container restarts. On startup we create symlinks from the paths
+# that scripts expect into the state/ directory.
+
+foreground {
+  /bin/bash -c "
+    STATE=/root/.cloud_admin/state
+    CLOUD=/root/.cloud_admin
+
+    # Symlink meraki_memory if it exists in state but not in the main dir
+    if [ -d \"\${STATE}/meraki_memory\" ] && [ ! -L \"\${CLOUD}/meraki_memory\" ]; then
+      rm -rf \"\${CLOUD}/meraki_memory\" 2>/dev/null
+      ln -sfn \"\${STATE}/meraki_memory\" \"\${CLOUD}/meraki_memory\"
+    fi
+
+    # Symlink schedules
+    if [ -d \"\${STATE}/schedules\" ] && [ ! -L \"\${CLOUD}/schedules\" ]; then
+      rm -rf \"\${CLOUD}/schedules\" 2>/dev/null
+      ln -sfn \"\${STATE}/schedules\" \"\${CLOUD}/schedules\"
+    fi
+
+    # Symlink uplink_types
+    if [ -d \"\${STATE}/uplink_types\" ] && [ ! -L \"\${CLOUD}/uplink_types\" ]; then
+      rm -rf \"\${CLOUD}/uplink_types\" 2>/dev/null
+      ln -sfn \"\${STATE}/uplink_types\" \"\${CLOUD}/uplink_types\"
+    fi
+
+    # Restore env/ok/json files from state into expected locations
+    for ext in env ok json csv flag; do
+      for f in \"\${STATE}\"/*.\${ext} 2>/dev/null; do
+        [ -f \"\$f\" ] || continue
+        base=\$(basename \"\$f\")
+        target=\"\${CLOUD}/\${base}\"
+        if [ ! -e \"\$target\" ] || [ -L \"\$target\" ]; then
+          ln -sfn \"\$f\" \"\$target\"
+        fi
+      done
+    done
+
+    # Ensure IOS-XE images symlink exists
+    ln -sfn /var/lib/tftpboot/images /root/IOS-XE_images 2>/dev/null || true
+
+    echo '[init-env] State restoration complete.'
+  "
+}

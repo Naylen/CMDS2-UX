@@ -6,6 +6,9 @@ set -Eeuo pipefail
 need(){ command -v "$1" >/dev/null 2>&1 || { echo "Missing: $1" >&2; exit 1; }; }
 need dialog
 
+# Docker detection
+in_docker() { [[ "${CMDS_DOCKER:-0}" == "1" ]]; }
+
 BACKTITLE="CMDS-Deployment Server"
 TITLE="Catalyst to Meraki (cloud) (Device Local)"
 
@@ -481,16 +484,22 @@ submenu_server_services(){
                --msgbox "Reboot requires root privileges." 7 60
         continue
       fi
-      dialog --no-shadow --backtitle "$BACKTITLE" --title "Confirm Reboot" --yesno \
-"Are you sure you want to reboot this server now?
-
-Active tasks or SSH sessions may be interrupted." 10 70
+      local reboot_msg="Are you sure you want to reboot this server now?\n\nActive tasks or SSH sessions may be interrupted."
+      if in_docker; then
+        reboot_msg="Are you sure you want to restart the CMDS2 container?\n\nActive tasks or SSH sessions may be interrupted."
+      fi
+      dialog --no-shadow --backtitle "$BACKTITLE" --title "Confirm Reboot" --yesno "$reboot_msg" 10 70
       if (( $? == 0 )); then
         dialog --no-shadow --title "Rebooting…" --infobox "Rebooting in 3 seconds…" 5 40; sleep 1
         dialog --no-shadow --title "Rebooting…" --infobox "Rebooting in 2 seconds…" 5 40; sleep 1
         dialog --no-shadow --title "Rebooting…" --infobox "Rebooting in 1 second…" 5 40; sleep 1
         clear
-        systemctl reboot || reboot || shutdown -r now
+        if in_docker; then
+          # Signal s6-overlay to perform a clean container shutdown/restart
+          kill 1 2>/dev/null || true
+        else
+          systemctl reboot || reboot || shutdown -r now
+        fi
         exit 0
       fi
     else

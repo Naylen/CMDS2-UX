@@ -1,0 +1,4 @@
+#!/command/execlineb -P
+
+# Generate self-signed SSL certificate if not present
+foreground { /bin/bash /docker-generate-ssl-cert.sh }

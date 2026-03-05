@@ -1,0 +1,3 @@
+#!/command/execlineb -P
+# Apache httpd — serves firmware images via HTTP for switch downloads
+/usr/sbin/httpd -DFOREGROUND

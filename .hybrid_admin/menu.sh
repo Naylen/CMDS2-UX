@@ -8,6 +8,9 @@
 set -Eeuo pipefail
 
 need(){ command -v "$1" >/dev/null 2>&1 || { echo "Missing: $1" >&2; exit 1; }; }
+
+# Docker detection
+in_docker() { [[ "${CMDS_DOCKER:-0}" == "1" ]]; }
 need dialog
 
 BACKTITLE="CMDS-Deployment Server"
@@ -394,7 +397,11 @@ Active tasks or SSH sessions may be interrupted." 10 70
       set -e
       if (( yn == 0 )); then
         clear
-        systemctl reboot || reboot || shutdown -r now
+        if in_docker; then
+          kill 1 2>/dev/null || true
+        else
+          systemctl reboot || reboot || shutdown -r now
+        fi
         exit 0
       fi
     else

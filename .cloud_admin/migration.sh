@@ -39,6 +39,9 @@ need() { command -v "$1" >/dev/null 2>&1 || { echo "Missing dependency: $1" >&2;
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
 CLOUD_ADMIN_BASE="${CLOUD_ADMIN_BASE:-/root/.cloud_admin}"
 
+# Web API progress support (Phase 2)
+[[ "${CMDS_WEB_MODE:-0}" == "1" ]] && . /usr/local/lib/cmds2/docker-helpers.sh 2>/dev/null || true
+
 # ============================================================
 # Shared split-screen UI helpers (tailbox + gauge)
 #   – single dialog instance, like IOS-XE upgrader
@@ -2705,6 +2708,7 @@ cloud_migration_enable_meraki_connect() {
     ((done++))
     local LOGFILE="$RUN_DIR/devlogs/${ip}_meraki_connect.log"
 
+    web_progress $(( 10 + 80 * (done-1) / total )) "Claiming $ip (${done}/${total})"
     mc_log "[$ip] === Starting Meraki connect phase (${done}/${total}) ==="
 
     local final_status
@@ -2745,6 +2749,7 @@ fi
     mc_gauge "$pct" "Processed $done / $total (last: $ip, status: $final_status)"
   done
 
+  web_progress 100 "Meraki onboarding complete (${total} devices)"
   mc_gauge 100 "Meraki connect onboarding complete."
   sleep 2
   mc_ui_stop
