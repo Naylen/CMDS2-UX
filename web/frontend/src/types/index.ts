@@ -23,13 +23,28 @@ export interface SetupConfig {
   SSH_USERNAME: string;
   SSH_PASSWORD: string;
   ENABLE_PASSWORD: string;
+  DISCOVERY_MODE: string;
   DISCOVERY_IPS: string;
   DISCOVERY_NETWORKS: string;
+  SSH_TEST_IP: string;
+  DEFAULT_PRIV15_OK: string;
+  DEFAULT_LOGIN_PRIV: string;
+  ENABLE_TEST_OK: string;
   DNS_PRIMARY: string;
   DNS_SECONDARY: string;
+  HTTP_CLIENT_VLAN_ID: string;
   HTTP_CLIENT_SOURCE_IFACE: string;
+  MIN_IOSXE_REQUIRED: string;
   FW_CAT9K_FILE: string;
+  FW_CAT9K_PATH: string;
+  FW_CAT9K_SIZE_BYTES: string;
+  FW_CAT9K_SIZE_H: string;
+  FW_CAT9K_VERSION: string;
   FW_CAT9K_LITE_FILE: string;
+  FW_CAT9K_LITE_PATH: string;
+  FW_CAT9K_LITE_SIZE_BYTES: string;
+  FW_CAT9K_LITE_SIZE_H: string;
+  FW_CAT9K_LITE_VERSION: string;
 }
 
 export interface TestResult {
@@ -68,9 +83,19 @@ export interface PreflightResult {
   hostname: string;
   model: string;
   ios_ver: string;
+  install_mode: string;
+  req_image_type: string;
+  min_iosxe: string;
+  train: string;
+  meraki_compat_ok: string;
   dns_ok: string;
+  domain_lookup: string;
   http_client_ok: string;
   ping_meraki: string;
+  ping_google: string;
+  changed_dns: string;
+  enabled_domain_lookup: string;
+  changed_http_client: string;
   ready: string;
   notes: string;
 }

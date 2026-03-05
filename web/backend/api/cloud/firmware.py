@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
-import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -103,22 +103,41 @@ async def start_upgrade(_user: str = Depends(get_current_user)):
 async def schedule_upgrade(
     time_str: str, _user: str = Depends(get_current_user)
 ):
-    """Schedule a firmware upgrade using at daemon.
+    """Schedule a firmware upgrade using the at daemon directly.
 
-    time_str: 'at' compatible time string, e.g. '2:00 AM tomorrow'
+    scheduler.sh is fully interactive (dialog-based) and cannot be run
+    headless.  Instead, pipe the upgrade command to `at` directly.
+
+    time_str: 'at'-compatible time string, e.g. '2:00 AM tomorrow'
     """
-    scheduler = settings.cloud_admin_dir / "scheduler.sh"
-    if not scheduler.is_file():
-        raise HTTPException(404, "Scheduler script not found")
+    upgrade_script = _UPGRADE_SCRIPT
+    sel_env = str(settings.cloud_admin_dir / "selected_upgrade.env")
+    if not Path(sel_env).is_file():
+        raise HTTPException(400, "No devices selected (selected_upgrade.env missing)")
+
+    # Build the command that at will execute
+    at_command = (
+        f"cd {settings.cloud_admin_dir} && "
+        f"CMDS_DOCKER=1 CMDS_WEB_MODE=1 "
+        f"bash {upgrade_script} {sel_env}\n"
+    )
 
     try:
-        proc = subprocess.run(
-            ["bash", str(scheduler), time_str],
-            capture_output=True, text=True, timeout=10,
-            cwd=str(settings.cloud_admin_dir),
-            env={**os.environ, "CMDS_DOCKER": "1", "CMDS_WEB_MODE": "1"},
+        proc = await asyncio.create_subprocess_exec(
+            "at", time_str,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "CMDS_DOCKER": "1"},
         )
-        return {"scheduled": True, "output": proc.stdout.strip()}
+        stdout, stderr = await asyncio.wait_for(proc.communicate(at_command.encode()), timeout=10)
+        if proc.returncode != 0:
+            raise HTTPException(500, f"at failed: {stderr.decode().strip()}")
+        return {"scheduled": True, "output": stderr.decode().strip()}
+    except asyncio.TimeoutError:
+        raise HTTPException(504, "Scheduling timed out")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -127,11 +146,14 @@ async def schedule_upgrade(
 async def list_schedules(_user: str = Depends(get_current_user)):
     """List scheduled at jobs."""
     try:
-        proc = subprocess.run(
-            ["atq"], capture_output=True, text=True, timeout=5,
+        proc = await asyncio.create_subprocess_exec(
+            "atq",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
         jobs = []
-        for line in proc.stdout.strip().splitlines():
+        for line in stdout.decode().strip().splitlines():
             parts = line.split(None, 1)
             if len(parts) >= 2:
                 jobs.append(ScheduledJob(

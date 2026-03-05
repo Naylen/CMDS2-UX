@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
-import subprocess
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -14,22 +14,30 @@ from web.backend.models.schemas import ServiceStatus
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 _S6_SERVICES = ["tftpd", "httpd", "atd"]
+# s6 binaries live in /command (s6-overlay), not in standard PATH
+_S6_SVSTAT = "/command/s6-svstat"
+_S6_SVC = "/command/s6-svc"
 
 
-def _s6_status(name: str) -> str:
+async def _s6_status(name: str) -> str:
     try:
-        out = subprocess.run(
-            ["s6-svstat", f"/run/service/{name}"],
-            capture_output=True, text=True, timeout=5,
+        proc = await asyncio.create_subprocess_exec(
+            _S6_SVSTAT, f"/run/service/{name}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        return "active" if "true" in out.stdout else "inactive"
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+        output = stdout.decode()
+        # s6-svstat output: "up (pid NNN) NNN seconds" or "down NNN seconds"
+        return "active" if output.startswith("up") else "inactive"
     except Exception:
         return "unknown"
 
 
 @router.get("/services", response_model=list[ServiceStatus])
 async def list_services(_user: str = Depends(get_current_user)):
-    return [ServiceStatus(name=s, state=_s6_status(s)) for s in _S6_SERVICES]
+    statuses = await asyncio.gather(*[_s6_status(s) for s in _S6_SERVICES])
+    return [ServiceStatus(name=s, state=st) for s, st in zip(_S6_SERVICES, statuses)]
 
 
 @router.post("/services/{name}")
@@ -46,10 +54,12 @@ async def control_service(
 
     flag_map = {"start": "-u", "stop": "-d", "restart": "-r"}
     try:
-        subprocess.run(
-            ["s6-svc", flag_map[action], f"/run/service/{name}"],
-            timeout=10,
+        proc = await asyncio.create_subprocess_exec(
+            _S6_SVC, flag_map[action], f"/run/service/{name}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
+        await asyncio.wait_for(proc.communicate(), timeout=10)
         return {"service": name, "action": action, "ok": True}
     except Exception as e:
         raise HTTPException(500, str(e))
@@ -63,17 +73,19 @@ async def run_backup(_user: str = Depends(get_current_user)):
         raise HTTPException(404, "Backup script not found")
 
     try:
-        proc = subprocess.run(
-            ["bash", str(script)],
-            capture_output=True, text=True, timeout=120,
-            env={**os.environ, "CMDS_DOCKER": "1"},
+        proc = await asyncio.create_subprocess_exec(
+            "bash", str(script),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "CMDS_DOCKER": "1", "CMDS_WEB_MODE": "1"},
         )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
         return {
             "exit_code": proc.returncode,
-            "stdout": proc.stdout[-2000:],
-            "stderr": proc.stderr[-500:],
+            "stdout": stdout.decode()[-2000:],
+            "stderr": stderr.decode()[-500:],
         }
-    except subprocess.TimeoutExpired:
+    except asyncio.TimeoutError:
         raise HTTPException(504, "Backup timed out")
 
 
@@ -81,30 +93,29 @@ async def run_backup(_user: str = Depends(get_current_user)):
 async def system_info(_user: str = Depends(get_current_user)):
     """Basic system information."""
     info = {}
-    try:
-        info["hostname"] = subprocess.run(
-            ["hostname"], capture_output=True, text=True, timeout=5
-        ).stdout.strip()
-    except Exception:
-        info["hostname"] = "unknown"
 
-    try:
-        info["uptime"] = subprocess.run(
-            ["uptime", "-p"], capture_output=True, text=True, timeout=5
-        ).stdout.strip()
-    except Exception:
-        info["uptime"] = "unknown"
+    async def _run_cmd(cmd: list[str]) -> str:
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+            return stdout.decode().strip()
+        except Exception:
+            return "unknown"
 
-    # Disk usage for tftpboot
-    try:
-        out = subprocess.run(
-            ["df", "-h", str(settings.tftpboot_dir)],
-            capture_output=True, text=True, timeout=5,
-        )
-        lines = out.stdout.strip().splitlines()
-        if len(lines) >= 2:
-            info["tftpboot_disk"] = lines[1]
-    except Exception:
-        pass
+    hostname, uptime, disk = await asyncio.gather(
+        _run_cmd(["hostname"]),
+        _run_cmd(["uptime", "-p"]),
+        _run_cmd(["df", "-h", str(settings.tftpboot_dir)]),
+    )
+
+    info["hostname"] = hostname
+    info["uptime"] = uptime
+    disk_lines = disk.strip().splitlines()
+    if len(disk_lines) >= 2:
+        info["tftpboot_disk"] = disk_lines[1]
 
     return info

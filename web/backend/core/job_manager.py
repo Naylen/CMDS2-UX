@@ -40,6 +40,8 @@ class Job:
 class JobManager:
     """In-memory job tracker. Completed jobs persist via SQLite (written by script_runner)."""
 
+    MAX_COMPLETED_JOBS = 200  # evict oldest completed jobs beyond this limit
+
     def __init__(self):
         self._jobs: dict[str, Job] = {}
         self._lock = asyncio.Lock()
@@ -50,7 +52,19 @@ class JobManager:
         job = Job(job_id=job_id, script=script, mode=mode, category=category)
         async with self._lock:
             self._jobs[job_id] = job
+            self._evict_old_jobs()
         return job
+
+    def _evict_old_jobs(self):
+        """Remove oldest completed/failed/cancelled jobs when over the limit."""
+        finished = [
+            j for j in self._jobs.values()
+            if j.status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED)
+        ]
+        if len(finished) > self.MAX_COMPLETED_JOBS:
+            finished.sort(key=lambda j: j.started_at)
+            for j in finished[: len(finished) - self.MAX_COMPLETED_JOBS]:
+                self._jobs.pop(j.job_id, None)
 
     async def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)

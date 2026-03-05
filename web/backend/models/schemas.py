@@ -63,18 +63,36 @@ class DashboardStatus(BaseModel):
 
 # ── Setup ────────────────────────────────────────────────────────────────
 class SetupConfig(BaseModel):
-    """Fields from meraki_discovery.env (sensitive values masked on read)."""
+    """Fields from meraki_discovery.env (sensitive values masked on read).
+
+    Matches the variables written by setupwizard.sh.
+    """
     MERAKI_API_KEY: str = ""
     SSH_USERNAME: str = ""
     SSH_PASSWORD: str = ""
     ENABLE_PASSWORD: str = ""
+    DISCOVERY_MODE: str = ""
     DISCOVERY_IPS: str = ""
     DISCOVERY_NETWORKS: str = ""
+    SSH_TEST_IP: str = ""
+    DEFAULT_PRIV15_OK: str = ""
+    DEFAULT_LOGIN_PRIV: str = ""
+    ENABLE_TEST_OK: str = ""
     DNS_PRIMARY: str = ""
     DNS_SECONDARY: str = ""
+    HTTP_CLIENT_VLAN_ID: str = ""
     HTTP_CLIENT_SOURCE_IFACE: str = ""
+    MIN_IOSXE_REQUIRED: str = ""
     FW_CAT9K_FILE: str = ""
+    FW_CAT9K_PATH: str = ""
+    FW_CAT9K_SIZE_BYTES: str = ""
+    FW_CAT9K_SIZE_H: str = ""
+    FW_CAT9K_VERSION: str = ""
     FW_CAT9K_LITE_FILE: str = ""
+    FW_CAT9K_LITE_PATH: str = ""
+    FW_CAT9K_LITE_SIZE_BYTES: str = ""
+    FW_CAT9K_LITE_SIZE_H: str = ""
+    FW_CAT9K_LITE_VERSION: str = ""
 
 
 class TestResult(BaseModel):
@@ -123,13 +141,24 @@ class ScheduledJob(BaseModel):
 
 # ── Preflight ────────────────────────────────────────────────────────────
 class PreflightResult(BaseModel):
+    """Matches the CSV columns written by meraki_preflight.sh summary."""
     ip: str
     hostname: str = ""
     model: str = ""
     ios_ver: str = ""
+    install_mode: str = ""
+    req_image_type: str = ""
+    min_iosxe: str = ""
+    train: str = ""
+    meraki_compat_ok: str = ""
     dns_ok: str = ""
+    domain_lookup: str = ""
     http_client_ok: str = ""
     ping_meraki: str = ""
+    ping_google: str = ""
+    changed_dns: str = ""
+    enabled_domain_lookup: str = ""
+    changed_http_client: str = ""
     ready: str = ""
     notes: str = ""
 

@@ -65,12 +65,19 @@ class ConnectionManager:
             all_ws = set()
             for subs in self._subscriptions.values():
                 all_ws.update(subs)
+        dead: list[WebSocket] = []
         payload = json.dumps(message)
         for ws in all_ws:
             try:
                 await ws.send_text(payload)
             except Exception:
-                pass
+                dead.append(ws)
+        # Clean up dead connections
+        if dead:
+            async with self._lock:
+                for ws in dead:
+                    for subs in self._subscriptions.values():
+                        subs.discard(ws)
 
 
 manager = ConnectionManager()

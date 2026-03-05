@@ -18,11 +18,12 @@ _MGMT_IP_SCRIPT = str(settings.cloud_admin_dir / "per_switch_ip_migration.sh")
 
 @router.post("/auto", response_model=JobStartResponse)
 async def start_auto_port_migration(_user: str = Depends(get_current_user)):
-    """Launch auto_per_port_migration.sh (non-interactive)."""
-    env_file = str(settings.cloud_admin_dir / "meraki_discovery.env")
+    """Launch auto_per_port_migration.sh in batch mode (build-diff + apply-diff)."""
+    # The script expects subcommand: build-diff, apply-diff, or menu.
+    # We chain both phases: build the diff configs, then apply them.
     job = await run_script(
         _AUTO_SCRIPT,
-        args=[env_file],
+        args=["build-diff"],
         mode="cloud",
         category="ports",
     )

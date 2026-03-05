@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 
 from fastapi import APIRouter, Depends
 
@@ -85,13 +86,15 @@ async def test_api(config: SetupConfig, _user: str = Depends(get_current_user)):
         return TestResult(success=False, message="API key not provided")
 
     try:
+        # Pass API key via environment variable, not command line (avoids /proc exposure)
         proc = await asyncio.create_subprocess_exec(
             "python3", "-c",
-            f"import meraki; d=meraki.DashboardAPI('{api_key}',suppress_logging=True); "
-            f"orgs=d.organizations.getOrganizations(); "
-            f"print(f'OK: {{len(orgs)}} organization(s) accessible')",
+            "import os, meraki; d=meraki.DashboardAPI(os.environ['MERAKI_KEY'],suppress_logging=True); "
+            "orgs=d.organizations.getOrganizations(); "
+            "print(f'OK: {len(orgs)} organization(s) accessible')",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, "MERAKI_KEY": api_key},
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
         if proc.returncode == 0:

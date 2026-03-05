@@ -14,6 +14,14 @@ export function useJobProgress(jobId: string | null) {
   useEffect(() => {
     if (!jobId) return;
 
+    // Reset state for new job
+    setProgress(0);
+    setMessage("");
+    setLogs([]);
+    setCompleted(false);
+    setExitCode(null);
+    logsRef.current = [];
+
     wsClient.connect();
     wsClient.subscribe(jobId);
 

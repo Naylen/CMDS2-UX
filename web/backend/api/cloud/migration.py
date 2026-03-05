@@ -21,10 +21,12 @@ _MEMORY_DIR = settings.cloud_admin_dir / "meraki_memory"
 @router.post("/start", response_model=JobStartResponse)
 async def start_migration(_user: str = Depends(get_current_user)):
     """Launch migration.sh to claim devices into Meraki cloud."""
-    env_file = str(settings.cloud_admin_dir / "meraki_discovery.env")
+    # migration.sh expects a subcommand as $1 (select|map|enable|all)
+    # "enable" skips the interactive switch-selection dialog and runs
+    # the claim + network-map phases using the pre-selected devices.
     job = await run_script(
         _SCRIPT,
-        args=[env_file],
+        args=["enable"],
         mode="cloud",
         category="migration",
     )

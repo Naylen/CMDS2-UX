@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
-import subprocess
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
@@ -21,6 +21,7 @@ router = APIRouter(prefix="/api/v1/status", tags=["status"])
 
 # s6 services to monitor
 _S6_SERVICES = ["tftpd", "httpd", "atd"]
+_S6_SVSTAT = "/command/s6-svstat"
 
 # Cloud workflow completion markers (label -> file path)
 _CLOUD_STEPS = [
@@ -40,16 +41,17 @@ _HYBRID_STEPS = [
 ]
 
 
-def _check_s6_service(name: str) -> str:
-    """Query s6-svstat for a service."""
+async def _check_s6_service(name: str) -> str:
+    """Query s6-svstat for a service (async)."""
     try:
-        out = subprocess.run(
-            ["s6-svstat", f"/run/service/{name}"],
-            capture_output=True, text=True, timeout=5,
+        proc = await asyncio.create_subprocess_exec(
+            _S6_SVSTAT, f"/run/service/{name}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        if "true" in out.stdout:
-            return "active"
-        return "inactive"
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+        output = stdout.decode()
+        return "active" if output.startswith("up") else "inactive"
     except Exception:
         return "unknown"
 
@@ -74,7 +76,7 @@ def _count_devices() -> dict[str, int]:
         try:
             content = sel_file.read_text()
             for line in content.splitlines():
-                if "SELECTED_IPS" in line or "UPGRADE_IPS" in line:
+                if "UPGRADE_SELECTED_IPS" in line:
                     ips = line.split("=", 1)[1].strip().strip("\"'()").split()
                     counts["selected"] = len([ip for ip in ips if ip])
         except Exception:
@@ -90,8 +92,9 @@ def _count_devices() -> dict[str, int]:
 
 @router.get("", response_model=DashboardStatus)
 async def get_status(_user: str = Depends(get_current_user)):
+    statuses = await asyncio.gather(*[_check_s6_service(s) for s in _S6_SERVICES])
     services = [
-        ServiceStatus(name=s, state=_check_s6_service(s)) for s in _S6_SERVICES
+        ServiceStatus(name=s, state=st) for s, st in zip(_S6_SERVICES, statuses)
     ]
     cloud_steps = [
         WorkflowStep(label=label, done=path.is_file() and path.stat().st_size > 0)
@@ -115,6 +118,7 @@ async def get_status(_user: str = Depends(get_current_user)):
 
 @router.get("/services", response_model=list[ServiceStatus])
 async def get_services(_user: str = Depends(get_current_user)):
+    statuses = await asyncio.gather(*[_check_s6_service(s) for s in _S6_SERVICES])
     return [
-        ServiceStatus(name=s, state=_check_s6_service(s)) for s in _S6_SERVICES
+        ServiceStatus(name=s, state=st) for s, st in zip(_S6_SERVICES, statuses)
     ]

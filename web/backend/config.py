@@ -1,14 +1,20 @@
 """Application configuration from environment variables."""
 
+import secrets
 from pathlib import Path
 from pydantic_settings import BaseSettings
+
+
+def _generate_secret() -> str:
+    """Generate a random JWT secret if none is configured."""
+    return secrets.token_urlsafe(48)
 
 
 class Settings(BaseSettings):
     # Auth
     admin_user: str = "admin"
     admin_password: str = "changeme"
-    jwt_secret: str = "cmds2-change-me-in-production"
+    jwt_secret: str = ""
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
@@ -33,3 +39,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Ensure JWT secret is never empty — generate random one if not set
+if not settings.jwt_secret:
+    settings.jwt_secret = _generate_secret()

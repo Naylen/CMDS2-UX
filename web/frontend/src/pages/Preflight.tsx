@@ -77,13 +77,17 @@ export default function Preflight() {
   };
 
   const columns = [
-    { title: "IP", dataIndex: "ip", key: "ip" },
+    { title: "IP", dataIndex: "ip", key: "ip", fixed: "left" as const, width: 130 },
     { title: "Hostname", dataIndex: "hostname", key: "hostname" },
     { title: "Model", dataIndex: "model", key: "model" },
     { title: "IOS-XE", dataIndex: "ios_ver", key: "ios_ver" },
+    { title: "Install Mode", dataIndex: "install_mode", key: "install_mode" },
+    { title: "Meraki OK", dataIndex: "meraki_compat_ok", key: "meraki_compat_ok", render: okTag },
     { title: "DNS", dataIndex: "dns_ok", key: "dns_ok", render: okTag },
+    { title: "Domain Lookup", dataIndex: "domain_lookup", key: "domain_lookup", render: okTag },
     { title: "HTTP Client", dataIndex: "http_client_ok", key: "http_client_ok", render: okTag },
     { title: "Ping Meraki", dataIndex: "ping_meraki", key: "ping_meraki", render: okTag },
+    { title: "Ping Google", dataIndex: "ping_google", key: "ping_google", render: okTag },
     { title: "Ready", dataIndex: "ready", key: "ready", render: okTag },
     { title: "Notes", dataIndex: "notes", key: "notes", ellipsis: true },
   ];
@@ -128,6 +132,7 @@ export default function Preflight() {
           columns={columns}
           rowKey="ip"
           size="small"
+          scroll={{ x: 1600 }}
           pagination={{ pageSize: 50 }}
         />
       </Card>

@@ -13,7 +13,7 @@ class WsClient {
 
   constructor() {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    this.url = `${proto}//${window.location.host}/api/v1/ws?token=cookie`;
+    this.url = `${proto}//${window.location.host}/api/v1/ws`;
   }
 
   connect() {

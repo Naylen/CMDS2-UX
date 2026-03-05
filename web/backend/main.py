@@ -51,10 +51,11 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
-# CORS — allow the nginx-served frontend
+# CORS — in production nginx proxies everything on the same origin so CORS
+# is not needed.  For development with Vite dev server, add the dev origin.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://localhost:8443", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,8 +88,8 @@ async def websocket_endpoint(ws: WebSocket):
     Client sends: {"type": "subscribe", "job_id": "..."}
     Server sends: {"type": "progress|log|complete", ...}
     """
-    # Authenticate via query param or cookie
-    token = ws.query_params.get("token") or ws.cookies.get("access_token")
+    # Authenticate via query param (real JWT) or httpOnly cookie
+    token = ws.query_params.get("token") or ws.cookies.get("access_token") or ""
     if token:
         payload = decode_token(token)
         if not payload or payload.get("type") != "access":

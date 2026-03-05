@@ -136,6 +136,9 @@ export default function Setup() {
               <Form.Item label="Secondary DNS" name="DNS_SECONDARY">
                 <Input placeholder="e.g. 8.8.4.4" />
               </Form.Item>
+              <Form.Item label="HTTP Client VLAN ID" name="HTTP_CLIENT_VLAN_ID">
+                <Input placeholder="e.g. 100" />
+              </Form.Item>
               <Form.Item label="HTTP Client Source Interface" name="HTTP_CLIENT_SOURCE_IFACE">
                 <Input placeholder="e.g. Vlan100" />
               </Form.Item>

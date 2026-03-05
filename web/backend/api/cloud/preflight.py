@@ -77,14 +77,25 @@ async def get_results(_user: str = Depends(get_current_user)):
         text = csv_path.read_text(errors="replace")
         reader = csv.DictReader(io.StringIO(text))
         for row in reader:
+            # Map all CSV columns to PreflightResult fields
             results.append(PreflightResult(
                 ip=row.get("ip", ""),
                 hostname=row.get("hostname", ""),
                 model=row.get("model", ""),
                 ios_ver=row.get("ios_ver", ""),
+                install_mode=row.get("install_mode", ""),
+                req_image_type=row.get("req_image_type", ""),
+                min_iosxe=row.get("min_iosxe", ""),
+                train=row.get("train", ""),
+                meraki_compat_ok=row.get("meraki_compat_ok", ""),
                 dns_ok=row.get("dns_ok", ""),
+                domain_lookup=row.get("domain_lookup", ""),
                 http_client_ok=row.get("http_client_ok", ""),
                 ping_meraki=row.get("ping_meraki", ""),
+                ping_google=row.get("ping_google", ""),
+                changed_dns=row.get("changed_dns", ""),
+                enabled_domain_lookup=row.get("enabled_domain_lookup", ""),
+                changed_http_client=row.get("changed_http_client", ""),
                 ready=row.get("ready", ""),
                 notes=row.get("notes", ""),
             ))

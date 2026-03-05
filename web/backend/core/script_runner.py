@@ -24,8 +24,10 @@ MAX_LOG_LINES = 5000
 
 
 def _make_job_id(category: str) -> str:
+    import secrets
     ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    return f"{category}-{ts}"
+    rand = secrets.token_hex(4)
+    return f"{category}-{ts}-{rand}"
 
 
 def _base_env(mode: str) -> dict[str, str]:
@@ -70,8 +72,9 @@ async def run_script(
     cmd = ["bash", script_path] + (args or [])
     logger.info("Starting job %s: %s (cwd=%s)", job_id, " ".join(cmd), cwd)
 
-    # Launch the background task
-    asyncio.create_task(_run_and_stream(job, cmd, cwd, env))
+    # Launch the background task (save reference to prevent GC and silent loss)
+    task = asyncio.create_task(_run_and_stream(job, cmd, cwd, env))
+    task.add_done_callback(lambda t: t.exception() if not t.cancelled() and t.exception() else None)
     return job
 
 
@@ -135,9 +138,11 @@ async def _run_and_stream(
 
         await proc.wait()
         job.exit_code = proc.returncode
-        job.status = (
-            JobStatus.COMPLETED if proc.returncode == 0 else JobStatus.FAILED
-        )
+        # Don't overwrite CANCELLED status set by job_manager.cancel()
+        if job.status != JobStatus.CANCELLED:
+            job.status = (
+                JobStatus.COMPLETED if proc.returncode == 0 else JobStatus.FAILED
+            )
     except Exception as exc:
         logger.exception("Job %s crashed: %s", job.job_id, exc)
         job.status = JobStatus.FAILED
@@ -151,7 +156,33 @@ async def _run_and_stream(
             "exit_code": job.exit_code,
             "status": job.status.value,
         })
+        # Create .ok markers for successful runs (matches menu.sh behavior)
+        if job.status == JobStatus.COMPLETED:
+            _create_ok_marker(job.category)
+
         logger.info(
             "Job %s finished: status=%s exit_code=%s",
             job.job_id, job.status.value, job.exit_code,
         )
+
+
+# Map categories to their .ok marker files (mirrors menu.sh behavior)
+_OK_MARKERS = {
+    "firmware": "iosxe_upgrade.ok",
+    "preflight": "preflight.ok",
+    "migration": "migration.ok",
+    "ports": "iosxe_config_migration.ok",
+}
+
+
+def _create_ok_marker(category: str):
+    """Create the .ok marker file that menu.sh normally creates after a successful run."""
+    marker_name = _OK_MARKERS.get(category)
+    if marker_name:
+        marker_path = settings.cloud_admin_dir / marker_name
+        try:
+            marker_path.write_text(
+                datetime.now(timezone.utc).isoformat() + "\n"
+            )
+        except OSError:
+            logger.warning("Could not create marker: %s", marker_path)
